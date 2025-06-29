@@ -1,0 +1,220 @@
+import os
+import zipfile
+import glob
+
+
+def batch_zip_shapefiles(input_dir):
+    """
+    批量打包指定目录下的Shapefile文件。
+    每个Shapefile (例如 split_001.shp) 会和所有同名的相关文件
+    (例如 split_001.shx, split_001.dbf, split_001.prj等)
+    一起被压缩成一个独立的 .zip 文件 (例如 split_001.zip)。
+
+    Args:
+        input_dir (str): 包含Shapefile文件的目录路径。
+    """
+    if not os.path.isdir(input_dir):
+        print(f"错误：输入目录 '{input_dir}' 不存在。")
+        return
+
+    print(f"开始批量打包 '{input_dir}' 中的Shapefile文件...")
+
+    # 查找所有 .shp 文件作为打包的依据
+    # glob.glob 支持路径模式匹配
+    shp_files = glob.glob(os.path.join(input_dir, '*.shp'))
+
+    if not shp_files:
+        print(f"在目录 '{input_dir}' 中没有找到任何 .shp 文件。")
+        return
+
+    for shp_path in shp_files:
+        # 获取文件名（不带扩展名），例如 'split_001'
+        base_name = os.path.splitext(os.path.basename(shp_path))[0]
+
+        # 构造输出的zip文件路径
+        zip_filename = os.path.join(input_dir, f"{base_name}.zip")
+
+        # 查找所有与当前 .shp 文件同名的相关文件
+        # 例如，对于 'split_001.shp'，它会查找 'split_001.*' 的所有文件
+        related_files = glob.glob(os.path.join(input_dir, f"{base_name}.*"))
+
+        if not related_files:
+            print(f"警告：找不到与 {shp_path} 相关的任何文件，跳过打包。")
+            continue
+
+        try:
+            # 创建 zip 文件并添加所有相关文件
+            with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for file_to_add in related_files:
+                    # 获取文件在zip文件中的名称（只保留文件名，不包含完整路径）
+                    arcname = os.path.basename(file_to_add)
+                    zf.write(file_to_add, arcname)
+            print(f"成功打包：'{zip_filename}' 包含 {len(related_files)} 个文件。")
+        except Exception as e:
+            print(f"打包 '{shp_path}' 时发生错误：{e}")
+
+    print("所有Shapefile的打包操作已完成。")
+
+
+# ----------- 请修改这里的路径为您的实际矢量文件目录 -----------
+shapefile_directory = r'D:\Yaoganyingxiang\split_results'
+# ------------------------------------------------------------------
+
+if __name__ == "__main__":
+    batch_zip_shapefiles(shapefile_directory)    pimport os
+import zipfile
+import glob
+
+
+
+
+def batch_zip_shapefiles(input_dir):
+    """
+    Package shapefile files in a specified directory in batches.
+    Each shapefile (e.g. split_001.shp) will be associated with all related files with the same name
+    (e.g. split_001.shx, split_001.dbf, split_001.prj, etc.)
+    Together, they are compressed into a separate .zip file (e.g. split_001.zip).
+
+
+    Args:
+        input_dir (str): The directory path containing the Shapefile file.
+    """
+    if not os.path.isdir(input_dir):
+        print(f"Error: Input directory '{input_dir}' does not exist. ")
+        return
+
+
+    print(f"Start bulk packing of Shapefiles in '{input_dir}'...")
+
+
+    # Find all .shp files as a basis for packaging
+    # glob.glob supports path pattern matching
+    shp_files = glob.glob(os.path.join(input_dir, '*.shp'))
+
+
+    if not shp_files:
+        print(f"No .shp files found in directory '{input_dir}'. ")
+        return
+
+
+    for shp_path in shp_files:
+        # Get the file name (without extension), e.g. 'split_001'
+        base_name = os.path.splitext(os.path.basename(shp_path))[0]
+
+
+        # Construct the path of the output zip file
+        zip_filename = os.path.join(input_dir, f"{base_name}.zip")
+
+
+        # Find all related files with the same name as the current .shp file
+        # For example, for 'split_001.shp', it looks for all files of 'split_001.*'
+        related_files = glob.glob(os.path.join(input_dir, f"{base_name}.*"))
+
+
+        if not related_files:
+            print(f"Warning: No files related to {shp_path} found, skip packing. ")
+            continue
+
+
+        try:
+            # Create a zip file and add all related files
+            with zipfile. ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for file_to_add in related_files:
+                    # Get the name of the file in the zip file (only the file name is kept, not the full path)
+                    arcname = os.path.basename(file_to_add)
+                    zf.write(file_to_add, arcname)
+            print(f"Successfully packaged: '{zip_filename}' contains {len(related_files)} files. ")
+        except Exception as e:
+            print(f"Error occurred while packing '{shp_path}': {e}")
+
+
+    print("The packaging of all shapefiles is complete.") )
+
+
+
+
+# ----------- Please modify the path here to your actual vector file directory-----------
+shapefile_directory = r'D:\Yaoganyingxiang\split_results'
+# ------------------------------------------------------------------
+
+
+if __name__ == "__main__":
+    batch_zip_shapefiles(shapefile_directory)import os
+import zipfile
+import glob
+
+
+
+
+def batch_zip_shapefiles(input_dir):
+    """
+    Package shapefile files in a specified directory in batches.
+    Each shapefile (e.g. split_001.shp) will be associated with all related files with the same name
+    (e.g. split_001.shx, split_001.dbf, split_001.prj, etc.)
+    Together, they are compressed into a separate .zip file (e.g. split_001.zip).
+
+
+    Args:
+        input_dir (str): The directory path containing the Shapefile file.
+    """
+    if not os.path.isdir(input_dir):
+        print(f"Error: Input directory '{input_dir}' does not exist. ")
+        return
+
+
+    print(f"Start bulk packing of Shapefiles in '{input_dir}'...")
+
+
+    # Find all .shp files as a basis for packaging
+    # glob.glob supports path pattern matching
+    shp_files = glob.glob(os.path.join(input_dir, '*.shp'))
+
+
+    if not shp_files:
+        print(f"No .shp files found in directory '{input_dir}'. ")
+        return
+
+
+    for shp_path in shp_files:
+        # Get the file name (without extension), e.g. 'split_001'
+        base_name = os.path.splitext(os.path.basename(shp_path))[0]
+
+
+        # Construct the path of the output zip file
+        zip_filename = os.path.join(input_dir, f"{base_name}.zip")
+
+
+        # Find all related files with the same name as the current .shp file
+        # For example, for 'split_001.shp', it looks for all files of 'split_001.*'
+        related_files = glob.glob(os.path.join(input_dir, f"{base_name}.*"))
+
+
+        if not related_files:
+            print(f"Warning: No files related to {shp_path} found, skip packing. ")
+            continue
+
+
+        try:
+            # Create a zip file and add all related files
+            with zipfile. ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for file_to_add in related_files:
+                    # Get the name of the file in the zip file (only the file name is kept, not the full path)
+                    arcname = os.path.basename(file_to_add)
+                    zf.write(file_to_add, arcname)
+            print(f"Successfully packaged: '{zip_filename}' contains {len(related_files)} files. ")
+        except Exception as e:
+            print(f"Error occurred while packing '{shp_path}': {e}")
+
+
+    print("The packaging of all shapefiles is complete.") )
+
+
+
+
+# ----------- Please modify the path here to your actual vector file directory-----------
+shapefile_directory = r'D:\Yaoganyingxiang\split_results'
+# ------------------------------------------------------------------
+
+
+if __name__ == "__main__":
+    batch_zip_shapefiles(shapefile_directory)    
