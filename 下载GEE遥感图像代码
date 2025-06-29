@@ -1,0 +1,47 @@
+// 导入你选中的单个网格
+
+var roi = ee.FeatureCollection("projects/ee-cyj07612/assets/split_063");
+
+
+
+// 后续代码直接用roi即可
+
+var collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+
+  .filterDate('2020-05-01', '2020-09-30') // 时间范围不变
+
+  .filter(ee.Filter.lt('CLOUD_COVER', 10)) // 云量筛选不变
+
+  .filterBounds(roi);
+
+
+
+var bands = ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'];
+
+var roiUnion = roi.union(1);
+
+
+
+// 35方法：最大值合成，尽量填补缺失区
+
+var composite = collection.select(bands).median().clip(roiUnion);
+
+
+
+Export.image.toDrive({
+
+  image: composite,
+
+  description: 'Landsat8_maxComposite_202005-202009',
+
+  folder: 'EarthEngineOutput',
+
+  fileNamePrefix: 'Landsat8_maxComposite_202005-202009',
+
+  region: roiUnion.geometry(),
+
+  scale: 30,
+
+  maxPixels: 1e13
+
+}); 
