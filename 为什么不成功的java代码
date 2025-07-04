@@ -1,0 +1,45 @@
+// 1. --- 配置部分 ---
+var GCS_BUCKET_NAME = 'your-dayhappy-gee-uploads-20250629';
+
+// ！！！注意：这里的路径已被修改为新的、现代的资产路径格式
+var GEE_ASSET_ROOT_PATH = 'projects/ee-yuxiandong96/assets/my_gcs_shapefiles';
+
+
+// 2. --- 您需要手动填写的 GCS 文件名列表 ---
+var gcsFileNames = [
+  'split_001.zip',
+  'split_002.zip',
+  'split_003.zip'
+  // ... 添加更多文件名 ...
+];
+
+
+// 3. --- 主逻辑 (无需修改) ---
+print('使用新的目标路径格式创建任务...');
+print('目标文件夹: ' + GEE_ASSET_ROOT_PATH);
+
+// 提前检查目标文件夹是否存在（可选但推荐）
+try {
+  ee.data.getAsset(GEE_ASSET_ROOT_PATH);
+} catch(e) {
+  print('警告：目标文件夹不存在，正在尝试创建...');
+  ee.data.createFolder(GEE_ASSET_ROOT_PATH, true);
+  print('文件夹 ' + GEE_ASSET_ROOT_PATH + ' 已创建。');
+}
+
+
+gcsFileNames.forEach(function(filename) {
+  var assetName = filename.replace('.zip', '');
+  var assetId = GEE_ASSET_ROOT_PATH + '/' + assetName;
+  var gcsUri = 'gs://' + GCS_BUCKET_NAME + '/' + filename;
+
+  var featureCollection = ee.FeatureCollection(gcsUri);
+
+  Export.table.toAsset({
+    collection: featureCollection,
+    description: 'Import_' + assetName,
+    assetId: assetId
+  });
+});
+
+print('所有任务已提交到 "Tasks" 标签页，请手动点击 RUN 启动。');
