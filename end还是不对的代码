@@ -1,0 +1,90 @@
+import ee
+import os
+from google.cloud import storage
+
+# --- 最终确认的变量 ---
+# 1. 您的 Google Cloud Storage 存储桶名称 (请最后核对一次)
+GCS_BUCKET_NAME = "your-dayhappy-gee-uploads-20250629"
+
+# 2. 您在 GEE Assets 中存放矢量文件的根路径 (此路径基于我们之前的讨论，是正确的)
+GEE_ASSET_ROOT_PATH = "users/ee-yuxiandong96"
+
+# 3. 您的 Google Cloud Project ID (根据您的截图，此ID是正确的)
+GOOGLE_CLOUD_PROJECT_ID = "ee-yuxiandong96"
+
+
+# --- 变量部分结束 ---
+
+
+def get_gcs_zip_files(bucket_name, project_id):
+    """从 GCS 存储桶获取所有 .zip 文件的列表。"""
+    try:
+        print(f"正在连接到 GCS 项目 '{project_id}' 中的存储桶 '{bucket_name}'...")
+        client = storage.Client(project=project_id)
+        bucket = client.get_bucket(bucket_name)
+        blobs = bucket.list_blobs()
+
+        zip_files = []
+        for blob in blobs:
+            if blob.name.lower().endswith(".zip") and not blob.name.endswith("/"):
+                zip_files.append(f"gs://{bucket_name}/{blob.name}")
+
+        print(f"在 GCS 中找到了 {len(zip_files)} 个 .zip 文件。")
+        return zip_files
+    except Exception as e:
+        print(f"!!! 无法从 GCS 获取文件列表: {e}")
+        print("请检查：1. 存储桶名称和项目ID是否正确。 2. Cloud Storage API 是否已启用。 3. 您是否有权访问此存储桶。")
+        return []
+
+
+def upload_zip_to_gee_asset(gcs_uri, gee_asset_id):
+    """将单个 GCS zip 文件作为任务提交到 GEE。"""
+    print(f" -> 正在提交任务: '{gcs_uri}'")
+    try:
+        # GEE 会自动识别并解压 .zip 文件中的 Shapefile
+        collection = ee.FeatureCollection(gcs_uri)
+        task = ee.batch.Export.table.toAsset(
+            collection=collection,
+            description=f"Import_{os.path.basename(gee_asset_id)}",
+            assetId=gee_asset_id
+        )
+        task.start()
+        print(f"    -- 任务 '{task.id}' 已成功启动。")
+        return task
+    except Exception as e:
+        print(f"    -- !!! 任务提交失败: {e}")
+        return None
+
+
+def main():
+    """主执行函数"""
+    try:
+        print("正在初始化 Earth Engine API...")
+        ee.Initialize(project=GOOGLE_CLOUD_PROJECT_ID)
+        print("Earth Engine API 初始化成功。")
+    except Exception as e:
+        print(f"!!! Earth Engine API 初始化失败: {e}")
+        print("请确保您已运行 'earthengine authenticate' 并成功登录。")
+        return
+
+    gcs_zip_uris = get_gcs_zip_files(GCS_BUCKET_NAME, GOOGLE_CLOUD_PROJECT_ID)
+
+    if not gcs_zip_uris:
+        print("未找到文件或无法访问 GCS，程序退出。")
+        return
+
+    print("-" * 60)
+
+    for gcs_uri in gcs_zip_uris:
+        file_name = os.path.basename(gcs_uri)
+        asset_name = os.path.splitext(file_name)[0]
+        gee_asset_id = f"{GEE_ASSET_ROOT_PATH}/{asset_name}"
+        upload_zip_to_gee_asset(gcs_uri, gee_asset_id)
+
+    print("-" * 60)
+    print("\n所有导入任务已提交。")
+    print("请前往 GEE Code Editor 的 'Tasks' 标签页中监控它们的进度。")
+
+
+if __name__ == "__main__":
+    main()
