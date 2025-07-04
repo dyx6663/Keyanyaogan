@@ -1,0 +1,139 @@
+import ee
+import os
+import time
+from google.cloud import storage # 导入 Google Cloud Storage 客户端库
+
+# --- 配置部分 ---
+# 1. 你的本地文件夹路径 (包含要上传的 .zip 文件)
+# 请务必替换成你的实际路径。使用 r"" (原始字符串) 可以避免反斜杠的转义问题。
+LOCAL_VECTOR_FOLDER = r"D:\Yaoganyingxiang\split_results_zip" # <--- **请核对并修改此行，确保是你的本地路径**
+
+# 2. 你的 GEE 项目 ID
+# 根据我们之前的对话，这是你的项目ID。
+GEE_PROJECT_ID = 'ee-yuxiandong96' # <--- **请核对此行**
+
+# 3. GEE 中目标资产文件夹的路径
+# 例如: 'users/your_user_id/your_folder' 或 'projects/your_project_id/assets/your_folder'
+# 建议使用项目级资产路径，更加规范和易于管理。
+# 脚本将会在你指定的 GEE_PROJECT_ID 下的 assets 目录中创建 'yaogangyingxiang_splits' 文件夹。
+GEE_DESTINATION_FOLDER = f'projects/{GEE_PROJECT_ID}/assets/yaogangyingxiang_splits' # <--- **你可以修改此文件夹名称**
+
+# 4. Google Cloud Storage (GCS) 配置
+# 根据你提供的截图，这里更新为你的 GCS Bucket 名称
+GCS_BUCKET_NAME = 'your-dayhappy-gee-uploads-20250629' # <--- **这里已根据你的截图完善**
+GCS_UPLOAD_FOLDER = 'gee_temp_uploads' # GCS Bucket 内用于存放临时文件的文件夹
+
+# --- GEE 认证和初始化 ---
+try:
+    # 尝试用你的项目ID初始化。
+    ee.Initialize(project=GEE_PROJECT_ID)
+    print(f"Earth Engine API 已使用项目 '{GEE_PROJECT_ID}' 初始化成功。")
+except Exception as e:
+    # 如果初始化失败，通常是因为没有认证。
+    print(f"初始化失败：{e}。尝试认证...")
+    ee.Authenticate() # 这将弹出一个浏览器窗口让你登录Google账户进行认证
+    ee.Initialize(project=GEE_PROJECT_ID) # 认证后再次尝试初始化
+    print("Earth Engine API 认证并初始化成功。")
+
+# --- GCS 客户端初始化 ---
+try:
+    # 使用你的 GEE 项目ID来初始化GCS客户端
+    gcs_client = storage.Client(project=GEE_PROJECT_ID)
+    gcs_bucket = gcs_client.get_bucket(GCS_BUCKET_NAME)
+    print(f"Google Cloud Storage Bucket '{GCS_BUCKET_NAME}' 初始化成功。")
+except Exception as e:
+    print(f"!!! 错误: 无法连接到 Google Cloud Storage Bucket '{GCS_BUCKET_NAME}'。")
+    print(f"请检查 Bucket 名称、你的 Google Cloud 认证以及 Bucket 权限。错误详情：{e}")
+    print("你可能需要运行 'gcloud auth application-default login' 或设置 GOOGLE_APPLICATION_CREDENTIALS 环境变量。")
+    exit()
+
+
+print("\n--- 开始批量导入任务 ---")
+
+# 检查本地文件夹是否存在
+if not os.path.exists(LOCAL_VECTOR_FOLDER):
+    print(f"错误: 本地文件夹 '{LOCAL_VECTOR_FOLDER}' 不存在。请检查路径。")
+    print("请确认路径是否输入正确，例如：D:\\YourFolder\\SubFolder")
+    print("注意：Python 路径字符串中的反斜杠 '\\' 需要转义为 '\\\\' 或者使用原始字符串 r''。")
+    exit()
+
+# 获取本地文件夹中的所有 .zip 文件
+# 确保文件是有效的Shapefile压缩包 (包含 .shp, .shx, .dbf, .prj 等必要文件)
+zip_files_to_upload = [f for f in os.listdir(LOCAL_VECTOR_FOLDER) if f.lower().endswith('.zip')]
+
+if not zip_files_to_upload:
+    print(f"在 '{LOCAL_VECTOR_FOLDER}' 中没有找到任何 .zip 文件。请确保文件存在且以 .zip 结尾。")
+else:
+    print(f"在 '{LOCAL_VECTOR_FOLDER}' 中找到 {len(zip_files_to_upload)} 个 .zip 文件准备上传。")
+    print(f"这些文件将先上传到 GCS 路径: gs://{GCS_BUCKET_NAME}/{GCS_UPLOAD_FOLDER}/")
+    print(f"然后导入到 GEE 路径: '{GEE_DESTINATION_FOLDER}'")
+
+    started_tasks = []
+    failed_uploads = []
+
+    # 遍历并按文件名排序，方便查看和管理
+    for filename in sorted(zip_files_to_upload):
+        local_filepath = os.path.join(LOCAL_VECTOR_FOLDER, filename)
+        asset_name = os.path.splitext(filename)[0]
+        gee_asset_id = f'{GEE_DESTINATION_FOLDER}/{asset_name}'
+        gcs_blob_name = f'{GCS_UPLOAD_FOLDER}/{filename}'
+        gcs_uri = f'gs://{GCS_BUCKET_NAME}/{gcs_blob_name}'
+
+        print(f"\n处理文件: '{filename}'")
+        print(f"  1. 上传到 GCS: '{gcs_uri}'")
+
+        try:
+            # --- 上传文件到 GCS ---
+            blob = gcs_bucket.blob(gcs_blob_name)
+            
+            # 检查文件是否已存在于 GCS，如果存在则跳过上传
+            if blob.exists():
+                print(f"  - 文件 '{filename}' 已存在于 GCS，跳过上传步骤。")
+            else:
+                blob.upload_from_filename(local_filepath)
+                print(f"  √ 文件 '{filename}' 成功上传到 GCS。")
+
+            # --- 从 GCS 导入到 GEE Assets ---
+            print(f"  2. 从 GCS 导入到 GEE 资产: '{gee_asset_id}'")
+            task = ee.batch.Export.table.toAsset(
+                collection=ee.FeatureCollection(gcs_uri), # <--- 关键修改：这里传入 GCS URI
+                description=f'Import_{asset_name}_from_GCS', # 任务描述，方便在Tasks页面识别
+                assetId=gee_asset_id, # GEE 中创建的资产ID
+                # 可以根据需要添加其他参数，例如 crs, writeEmptyGeometries 等
+                # crs='EPSG:4326', # 如果你需要明确指定CRS
+                # writeEmptyGeometries=False, # 默认为True，如果你的数据可能包含空几何并想跳过，可设为False
+            )
+
+            task.start()
+            started_tasks.append({'filename': filename, 'task_id': task.id, 'gcs_uri': gcs_uri})
+            print(f"  √ GEE 导入任务 '{task.id}' 已成功启动。")
+
+            # 建议：为了避免同时启动过多任务（尤其是在网络条件不佳或文件量巨大的情况下），
+            # 可以在每个任务启动后稍作等待，防止API请求速率限制。
+            # time.sleep(1) # 等待1秒
+
+        except Exception as e:
+            print(f"!!! 处理文件 '{filename}' 失败: {e}")
+            print("  请检查:")
+            print(f"  - GCS Bucket 名称 '{GCS_BUCKET_NAME}' 是否正确。")
+            print(f"  - 你的本地环境是否已正确认证 Google Cloud (例如：`gcloud auth application-default login`)。")
+            print(f"  - 你的 GEE 账户/服务账户是否有权限读取 GCS Bucket 并写入 GEE Assets。")
+            print(f"  - '{local_filepath}' 是否是一个有效的 Shapefile .zip 文件。")
+            failed_uploads.append({'filename': filename, 'error': str(e)})
+
+    print("\n--- 所有任务启动尝试完毕 ---")
+    if started_tasks:
+        print(f"成功启动了 {len(started_tasks)} 个导入任务。")
+        print("请前往 GEE 的 'Tasks' 标签页查看所有任务的进度和状态:")
+        for task_info in started_tasks:
+            print(f"  - 文件: {task_info['filename']} -> 任务ID: {task_info['task_id']}")
+        print("\n您可以在浏览器中打开此链接查看任务：https://code.earthengine.google.com/tasks")
+    else:
+        print("没有成功启动任何导入任务。")
+
+    if failed_uploads:
+        print(f"\n以下 {len(failed_uploads)} 个文件导入失败:")
+        for fail_info in failed_uploads:
+            print(f"  - 文件: {fail_info['filename']}, 错误: {fail_info['error']}")
+
+print("\n脚本执行完毕。")
